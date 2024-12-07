@@ -1,0 +1,364 @@
+<!-- app/templates/assignments.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Assignments</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        // Function to open the modal
+        function openModal() {
+            document.getElementById("addAssignmentModal").style.display = "flex";
+        }
+
+        // Function to close the modal
+        function closeModal() {
+            document.getElementById("assignmentForm").reset();
+            document.getElementById("addAssignmentModal").style.display = "none";
+        }
+
+        // Function to open the edit modal and populate form with assignment data
+        function openEditModal(button) {
+            console.log("Edit modal opened");
+            const assignmentId = button.getAttribute("data-id");
+            
+            const assignmentElement = document.getElementById(`assignment-${assignmentId}`);
+            const currentDescription = assignmentElement.querySelector(".assignment-description").innerText; 
+            const currentDueDate = assignmentElement.querySelector("span").innerText;
+
+            document.getElementById("edit-description").value = currentDescription;
+            document.getElementById("edit-due_date").value = currentDueDate;
+            document.getElementById("edit-assignment-id").value = assignmentId;
+
+            document.getElementById("editAssignmentModal").style.display = "flex";
+        }
+
+
+        // Function to close the modal
+        function closeEditModal() {
+            document.getElementById("editAssignmentModal").style.display = "none";
+        }
+
+        function openSubjectModal() {
+            document.getElementById('subjectModal').style.display = 'flex';
+        }
+
+        function closeSubjectModal() {
+            document.getElementById('subjectModal').style.display = 'none';
+        }
+
+        async function submitSubject(event) {
+            event.preventDefault();
+            const subjectName = document.getElementById("subject-name").value;
+
+            const response = await fetch("{{ url_for('main.add_subject') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ name: subjectName })
+            });
+
+            if (response.ok) {
+                const newSubject = await response.json();
+                alert(`Subject "${newSubject.name}" added successfully.`);
+                closeSubjectModal();
+                location.reload(); 
+            } else {
+                alert("Failed to add subject.");
+            }
+        }
+
+        // Function to submit a new assignment
+        async function submitAssignment(event) {
+            event.preventDefault();
+
+            const title = document.getElementById("title").value;
+            const description = document.getElementById("description").value;
+            const due_date = document.getElementById("due_date").value;
+            const subject = document.getElementById("subject").value; 
+
+            const response = await fetch("{{ url_for('main.add_assignment') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    title: title,
+                    description: description,
+                    due_date: due_date,
+                    subject: subject, 
+                }),
+            });
+
+            if (response.ok) {
+                const newAssignment = await response.json();
+                if (newAssignment.title && newAssignment.due_date) {
+                    addAssignmentToList(newAssignment);
+                    closeModal();
+                    document.getElementById("addAssignmentModal").reset();
+                } else {
+                    console.error("Missing data in the response:", newAssignment);
+                    alert("Failed to add assignment. Missing data in the response.");
+                }
+            } else {
+                const errorData = await response.json();
+                alert(errorData.error || "Failed to add assignment.");
+            }
+        }
+
+
+        // Function to add the new assignment to the list without refreshing the page
+        function addAssignmentToList(assignment) {
+            const list = document.getElementById("assignmentsList");
+            const li = document.createElement("li");
+
+            const noAssignmentsMessage = document.querySelector("#assignmentsList li:last-child");
+            if (noAssignmentsMessage && noAssignmentsMessage.textContent === "No assignments found.") {
+                noAssignmentsMessage.remove();
+            }
+
+            li.id = `assignment-${assignment.id}`;
+            li.innerHTML = `
+                 <strong>
+                    <a href="/assignments/${assignment.id}">
+                        ${assignment.title}
+                    </a>
+                </strong> 
+                <button data-id="${assignment.id}" onclick="deleteAssignment(this)">Delete</button>
+                <button data-id="${ assignment.id }" onclick="openEditModal(this)">Edit</button>
+                <p class="assignment-description">${assignment.description}</p>
+                Due <span>${assignment.due_date}</span>
+                `;
+            list.appendChild(li);
+        }
+
+        // function to delete an assignment
+        async function deleteAssignment(button) {
+            const assignmentId = button.getAttribute("data-id");
+            const response = await fetch(`/assignments/${assignmentId}/delete`, {
+                method: "DELETE",
+            });
+
+            if (response.ok) {
+                const list = document.getElementById("assignmentsList");
+                const assignmentElement = document.getElementById(`assignment-${assignmentId}`);
+                if(assignmentElement) {
+                    list.removeChild(assignmentElement);
+                }
+            } else {
+                alert("Failed to delete assignment.");
+            }
+        }
+
+        // function to edit an assignment
+        async function editAssignment(event) {
+            event.preventDefault();
+
+            const assignmentId = document.getElementById("edit-assignment-id").value;
+            const description = document.getElementById("edit-description").value;
+            const due_date = document.getElementById("edit-due_date").value;
+
+            const response = await fetch(`assignments/${assignmentId}/edit`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    description: description,
+                    due_date: due_date,
+                }),
+            });
+
+            if (response.ok) {
+                const updatedAssignment = await response.json();
+                const assignmentElement = document.getElementById(`assignment-${assignmentId}`);
+                assignmentElement.querySelector(".assignment-description").innerText = updatedAssignment.description;
+                assignmentElement.querySelector("span").innerText = updatedAssignment.due_date;
+
+                assignmentElement.style.display = "none";
+                setTimeout(() => {
+                    assignmentElement.style.display = "block";
+                }, 0);
+                
+                closeEditModal();
+            } else {
+                const errorData = await response.json();
+                alert(errorData.error || "Failed to add assignment.");
+            }
+        }
+
+        // function to update the assignments list
+        async function updateAssignments() {
+            const subjectId = document.getElementById("filter-subject").value;
+            const sortOrder = document.getElementById("sortOrder").value;
+
+            try {
+                const response = await fetch(`/assignments?subject_id=${subjectId}&sort=${sortOrder}`);
+                if (response.ok) {
+                    const html = await response.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const updatedAssignmentsList = doc.querySelector('#assignmentsList');
+                    document.getElementById('assignmentsList').innerHTML = updatedAssignmentsList.innerHTML;
+                } else {
+                    alert("Failed to update assignments.");
+                }
+            } catch (error) {
+                console.error("Error updating assignments:", error);
+                alert("An error occurred while updating assignments.");
+            }
+        }
+
+        /* ------COMBINED THE FUNCTIONS TO ABOVE FUNCTION----- */
+        // async function filterAssignments() {
+        //     const selectedSubject = document.getElementById("filter-subject").value;
+
+        //     const response = await fetch(`/assignments/filter?subject_id=${selectedSubject}`);
+        //     const assignments = await response.json();
+
+        //     const assignmentsList = document.getElementById("assignmentsList");
+        //     assignmentsList.innerHTML = "";
+
+        //     assignments.forEach(assignment => {
+        //         const li = document.createElement("li");
+        //         li.id = `assignment-${assignment.id}`;
+        //         li.setAttribute("data-subject-id", assignment.subject_id);
+        //         li.innerHTML = `
+        //             <strong>
+        //                 <a href="/assignments/${assignment.id}">
+        //                     ${assignment.title}
+        //                 </a>
+        //             </strong>
+        //             <button class="inline-button" data-id="${assignment.id}" onclick="deleteAssignment(this)">Delete</button>
+        //             <button class="inline-button" data-id="${assignment.id}" onclick="openEditModal(this)">Edit</button>
+        //             <p class="assignment-description">${assignment.description}</p>
+        //             Due <span>${assignment.due_date}</span>
+        //         `;
+        //         assignmentsList.appendChild(li);
+        //     });
+        // }
+
+        // async function sortAssignments() {
+        //     const sortOrder = document.getElementById("sortOrder").value;
+
+        //     const response = await fetch(`/assignments?sort=${sortOrder}`);
+        //     if (response.ok) {
+        //         const html = await response.text();
+        //         const parser = new DOMParser();
+        //         const doc = parser.parseFromString(html, 'text/html');
+        //         const assignmentsList = doc.querySelector('#assignmentsList');
+        //         document.getElementById('assignmentsList').innerHTML = assignmentsList.innerHTML;
+        //     } else {
+        //         alert("Failed to sort assignments.");
+        //     }
+        // }
+
+
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Assignments</h1>
+            <div class="filters">
+                <label for="filter-subject">Filter by Subject:</label>
+                <select id="filter-subject" onchange="updateAssignments()">
+                    <option value="all">All</option>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select>
+                
+                <label for="sortOrder">Sort by Due Date:</label>
+                <select id="sortOrder" onchange="updateAssignments()">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                </select>
+            </div>
+            <button onclick="openModal()">Add New Assignment</button>
+            <button onclick="openSubjectModal()">Add New Subject</button> 
+        </div>
+
+        <!-- Assignments list -->
+        <ul id="assignmentsList">
+            {% for assignment in assignments %}
+                <li id="assignment-{{ assignment.id }}" data-subject-id="{{ assignment.subject_id }}"> 
+                    <strong>
+                        <a href="{{ url_for('main.assignment_detail', assignment_id=assignment.id) }}">
+                            {{ assignment.title }}
+                        </a>
+                    </strong>                     
+                    <button data-id="{{ assignment.id }}" onclick="deleteAssignment(this)">Delete</button>
+                    <button data-id="{{ assignment.id }}" onclick="openEditModal(this)">Edit</button>
+                    <p class="assignment-description">{{ assignment.description }}</p>
+                    Due <span>{{ assignment.due_date }}</span>
+                </li>
+            {% else %}
+                <li>No assignments found.</li>
+            {% endfor %}
+        </ul>
+
+    </div>
+
+    <!-- Modal for Add Assignment -->
+    <div id="addAssignmentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Add New Assignment</h2>
+            <form id="assignmentForm" onsubmit="submitAssignment(event)">
+                <label for="title">Title:</label>
+                <input type="text" id="title" required><br><br>
+
+                <label for="description">Description:</label>
+                <textarea id="description" required></textarea><br><br>
+
+                <label for="due_date">Due Date:</label>
+                <input type="date" id="due_date" required><br><br>
+                
+                <label for="subject">Subject:</label>
+                <select id="subject" required>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select><br><br>
+
+                <button type="submit">Add Assignment</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Edit Assignment -->
+    <div id="editAssignmentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2>Edit Assignment</h2>
+            <form id="editAssignmentForm" onsubmit="editAssignment(event)">
+                <input type="hidden" id="edit-assignment-id">
+
+                <label for="edit-description">Description:</label>
+                <textarea id="edit-description"></textarea><br><br>
+            
+                <label for="edit-due_date">Due Date:</label>
+                <input type="date" id="edit-due_date"><br><br>
+            
+                <button type="submit">Edit Assignment</button>
+            </form>
+        </div>
+    </div>
+    <!-- Modal for Add subject -->
+    <div id="subjectModal" class="modal">
+        <div class="modal-content">
+            <span onclick="closeSubjectModal()" style="cursor:pointer;float:right;">&times;</span>
+            <h2>Add New Subject</h2>
+            <form id="subjectForm" onsubmit="submitSubject(event)">
+                <label for="subject-name">Subject Name:</label>
+                <input type="text" id="subject-name" required>
+                <button type="submit">Add Subject</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+
+

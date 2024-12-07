@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Select Role</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .role-selection-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .role-button {
+            padding: 15px 30px;
+            margin: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: background-color 0.3s;
+            width: 200px;
+        }
+
+        .role-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="role-selection-container">
+        <h1>Select Your Role</h1>
+        <form action="{{ url_for('main.select_role') }}" method="post">
+            <button type="submit" name="role" value="teacher" class="role-button">Teacher</button>
+            <button type="submit" name="role" value="student" class="role-button">Student</button>
+        </form>
+    </div>
+</body>
+</html>
